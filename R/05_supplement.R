@@ -39,7 +39,8 @@ report <- function(d, v, label, fam = "ols", key = NULL) {
               tot, coef(c)["log_cum_ai"], star(c, "log_cum_ai")))
   if (!is.null(key)) {
     record(paste0(key, ".base"), base_mean(d, v)); record(paste0(key, ".end"), end_mean(d, v))
-    record(paste0(key, ".adopted"), coef(a)["adopted"]); record(paste0(key, ".month_fe"), coef(b)["adopted"])
+    record(paste0(key, ".adopted"), coef(a)["adopted"], pvalue(a)["adopted"])
+    record(paste0(key, ".month_fe"), coef(b)["adopted"], pvalue(b)["adopted"])
     record(paste0(key, ".at_apr26"), tot)
   }
 }
@@ -161,7 +162,8 @@ cat(sprintf("  %-30s %9.2f -> %9.2f | %+7.3f%-3s | %+7.3f%-3s | %+7.3f (slope %+
             tot, coef(c)["log_cum_ai"], star(c, "log_cum_ai")))
 record("work.prs_per_day.base", base_mean(mutate(d, r = n_prs / active_days), "r"))
 record("work.prs_per_day.end", end_mean(mutate(d, r = n_prs / active_days), "r"))
-record("work.prs_per_day.adopted", coef(a)["adopted"]); record("work.prs_per_day.month_fe", coef(b)["adopted"])
+record("work.prs_per_day.adopted", coef(a)["adopted"], pvalue(a)["adopted"])
+record("work.prs_per_day.month_fe", coef(b)["adopted"], pvalue(b)["adopted"])
 record("work.prs_per_day.at_apr26", tot)
 
 ## ---- (C) tab:prtypes -- PR-type classifier ----------------------------------
@@ -216,7 +218,9 @@ record("types.other_share_pct", 100 * mean(prs_c$cat == "other"))
 
 cnt <- prs_c %>% count(identity, month, cat) %>%
   pivot_wider(names_from = cat, values_from = n, values_fill = 0, names_prefix = "n_")
-pc <- pe_s %>% select(identity, month, adopted, post, log_cum_ai, ai_any) %>%
+# As in the original analysis, the PR-type models use panel_est as is (the
+# working-time and splitting models above use the de-duplicated pe_s).
+pc <- panel_est %>% select(identity, month, adopted, post, log_cum_ai, ai_any) %>%
   left_join(cnt, by = c("identity", "month")) %>%
   mutate(across(starts_with("n_"), ~ replace_na(.x, 0L)),
          n_tot = n_feature + n_fix + n_maint + n_revert + n_other) %>%
@@ -237,7 +241,8 @@ for (nm in names(cats)) {
               tot, exp(tot)))
   k <- paste0("types.", gsub("[^a-z]+", "_", tolower(nm)))
   record(paste0(k, ".base"), mean(pc[[v]][pc$month %in% BASE_MONTHS]))
-  record(paste0(k, ".adopted"), coef(a)["adopted"]); record(paste0(k, ".month_fe"), coef(b)["adopted"])
+  record(paste0(k, ".adopted"), coef(a)["adopted"], pvalue(a)["adopted"])
+  record(paste0(k, ".month_fe"), coef(b)["adopted"], pvalue(b)["adopted"])
   record(paste0(k, ".at_apr26"), tot)
 }
 
@@ -253,11 +258,11 @@ cat(sprintf("\n[title style] post-mandate, author + month FE: classifiable %.0f%
             coef(m_cl)["AI"], star(m_cl, "AI")))
 record("style.classified_nonai_pct", 100 * mean(post_s$classified[post_s$AI == 0]))
 record("style.classified_ai_pct", 100 * mean(post_s$classified[post_s$AI == 1]))
-record("style.classified_ai_pp", 100 * coef(m_cl)["AI"])
+record("style.classified_ai_pp", 100 * coef(m_cl)["AI"], pvalue(m_cl)["AI"])
 post_c <- filter(post_s, classified == 1)
 m_fx <- ols_ai("is_fix", post_c)
 cat(sprintf("              among classifiable titles: P(fix) AI coef %+0.3f%s\n", coef(m_fx)["AI"], star(m_fx, "AI")))
-record("style.fix_given_classified_pp", 100 * coef(m_fx)["AI"])
+record("style.fix_given_classified_pp", 100 * coef(m_fx)["AI"], pvalue(m_fx)["AI"])
 drift <- pr_s %>% filter(AI == 0, format(month, "%m") <= "06", format(month, "%Y") %in% c("2024", "2026")) %>%
   group_by(half = paste0(format(month, "%Y"), "H1")) %>%
   summarise(fix = mean(is_fix), feature = mean(is_feat), .groups = "drop")
@@ -300,7 +305,7 @@ for (K in c(7, 14)) {
               100 * mean(fu$any_feat[fu$AI == 0]), 100 * coef(mg)["AI"],
               100 * coef(ms)["AI:fixo"], pvalue(ms)["AI:fixo"]))
   k <- paste0("followup.k", K)
-  record(paste0(k, ".fix_base_pct"), 100 * mean(fu$any_fix[fu$AI == 0])); record(paste0(k, ".fix_pp"), 100 * coef(mf)["AI"])
-  record(paste0(k, ".feat_base_pct"), 100 * mean(fu$any_feat[fu$AI == 0])); record(paste0(k, ".feat_pp"), 100 * coef(mg)["AI"])
-  record(paste0(k, ".diff_pp"), 100 * coef(ms)["AI:fixo"]); record(paste0(k, ".diff_p"), pvalue(ms)["AI:fixo"])
+  record(paste0(k, ".fix_base_pct"), 100 * mean(fu$any_fix[fu$AI == 0])); record(paste0(k, ".fix_pp"), 100 * coef(mf)["AI"], pvalue(mf)["AI"])
+  record(paste0(k, ".feat_base_pct"), 100 * mean(fu$any_feat[fu$AI == 0])); record(paste0(k, ".feat_pp"), 100 * coef(mg)["AI"], pvalue(mg)["AI"])
+  record(paste0(k, ".diff_pp"), 100 * coef(ms)["AI:fixo"], pvalue(ms)["AI:fixo"]); record(paste0(k, ".diff_p"), pvalue(ms)["AI:fixo"])
 }

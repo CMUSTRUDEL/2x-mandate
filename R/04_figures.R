@@ -582,5 +582,5 @@ local({
   save_fig(p, "review_latency", cols = 1, height = H_STD)
 })
 
-cat("wrote all figures to figures/\n")
+cat("wrote all figures to output/figures/\n")
 dev.off(metrics_dev)

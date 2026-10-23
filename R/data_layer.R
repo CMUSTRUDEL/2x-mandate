@@ -4,7 +4,7 @@
 # This file reads a small set of tidy input tables and applies every filter and
 # derived-variable definition consistently, so that all downstream analyses
 # (RQ1-RQ3 and the figures) consume the same canonical objects. The raw data is
-# NOT distributed with this package (see README, "Data availability"); the tables
+# NOT distributed with this repository (see README, "Data availability"); the tables
 # below describe the schema an equivalent dataset must provide to re-run the code.
 #
 # Expected input files (place under `data/`; see README for the full schema):
@@ -17,10 +17,10 @@
 # Automation: each pull_requests / pr_reviews row carries an `is_automated`
 # boolean. Rows with is_automated == TRUE are excluded (PRs) or counted as
 # non-human review (reviews). How automation is detected upstream is out of scope
-# for this package (documented in the paper).
+# for this repository (documented in the paper).
 #
 # Sourcing this file populates the global env with: prs, reviews, commits, telem,
-# panel, roles, repo_cohort, RESULTS/record(), and the constants below. `source()`-safe.
+# panel, roles, repo_cohort, RESULTS/PVALS/record(), and the constants below. `source()`-safe.
 # =============================================================================
 suppressMessages({ library(tidyverse) })
 
@@ -37,11 +37,14 @@ REL_GEN46    <- as.Date("2026-02-01")
 
 p <- function(...) file.path(DATA, ...)
 
-# Every number the paper reports is recorded under a stable key, so that
-# R/check_paper.R can compare it with the value printed in the paper.
+# Every number the paper reports is recorded under a stable key (with its
+# p-value where it is a regression coefficient); R/run_all.R writes them to
+# output/results.csv and rebuilds the paper's tables from them.
 if (!exists("RESULTS")) RESULTS <- new.env()
-record <- function(key, value) {
+if (!exists("PVALS"))   PVALS   <- new.env()
+record <- function(key, value, p = NA_real_) {
   assign(key, unname(as.numeric(value)[1]), envir = RESULTS)
+  assign(key, unname(as.numeric(p)[1]), envir = PVALS)
   invisible(value)
 }
 # Floor to first-of-month. Accepts Date/datetime or "YYYY-MM"/"YYYY-MM-DD" strings.

@@ -1,11 +1,17 @@
 # =============================================================================
 # Figure data layer. Builds the derived monthly / per-PR / per-reviewer series
-# behind the figures from the same input tables as data_layer.R. AI authorship is
-# the `created-by-ai` label; automated PRs are excluded via `is_automated`. For
-# the descriptive review series a review event is automated when its account is
-# automated OR the event is templated tool output (`is_templated`, e.g. a bot
-# message posted through a human account); a human review is a non-automated
-# review by someone other than the PR author.
+# behind the figures from the same input tables as data_layer.R, following the
+# classifier choices of the original figure code, which are deliberately broader
+# than the estimation filters in data_layer.R:
+#   * the AI-share series counts a PR as AI-authored if it carries ANY
+#     AI-attribution label (`ai_any_label`), not only `created-by-ai`;
+#   * in the review-share and reviews-given series a review event is automated if
+#     its account is automated (`is_automated`) OR the event itself is flagged
+#     (`is_templated`: templated tool output, or flagged as a bot in the source
+#     export);
+#   * the human-boundary review timing (fig_review_latency) treats only
+#     `is_templated` events as automated, as the original timing code did.
+# A human review is a non-automated review by someone other than the PR author.
 # =============================================================================
 if (!exists("prs")) source("R/data_layer.R")
 suppressMessages({ library(tidyverse) })
@@ -23,7 +29,7 @@ ov_prs <- prs_raw %>%
   transmute(repository, number, pr_author = identity, month,
             state, is_revert = replace_na(is_revert, FALSE),
             total_cycle_time_hours,
-            is_ai = str_detect(replace_na(labels, ""), regex("created-by-ai", ignore_case = TRUE)))
+            is_ai = replace_na(as.logical(ai_any_label), FALSE))
 
 # ---- Raw review events (read once) ------------------------------------------
 rev_raw <- read_csv(p("pr_reviews.csv"), show_col_types = FALSE,
@@ -31,8 +37,8 @@ rev_raw <- read_csv(p("pr_reviews.csv"), show_col_types = FALSE,
   transmute(repository,
             pr_number = suppressWarnings(as.integer(pr_number)),
             author, identity, type, comment_time,
-            is_auto = tolower(replace_na(is_automated, "")) == "true" |
-              tolower(replace_na(is_templated, "")) == "true") %>%
+            is_tmpl = tolower(replace_na(is_templated, "")) == "true",
+            is_auto = tolower(replace_na(is_automated, "")) == "true" | is_tmpl) %>%
   filter(!is.na(pr_number))
 
 # Per-PR review-coverage flags on the descriptive PR frame.
@@ -129,7 +135,8 @@ fig_rev_given <- rg_pr %>% group_by(developer = identity, month) %>%
 # PR-level HUMAN-boundary review timing. The vendor pickup/review-lead split is
 # set by the first review of ANY kind (an automated account that comments
 # instantly collapses pickup); this recomputes both phases against the first
-# non-author, non-automated review. is_ai is the NARROW created-by-ai label.
+# non-author review that is not flagged is_templated. is_ai is the NARROW
+# created-by-ai label.
 # =============================================================================
 prh_raw <- read_csv(p("pull_requests.csv"), show_col_types = FALSE) %>%
   mutate(created = as.Date(created_at), month = mfloor(created),
@@ -137,11 +144,11 @@ prh_raw <- read_csv(p("pull_requests.csv"), show_col_types = FALSE) %>%
   filter(!is_automated, created >= OV_START, created <= OV_END)
 
 # First human review time per PR from the raw stream (author-keyed; a human
-# review is a non-automated review by someone other than the PR author).
+# review is a review not flagged is_templated, by someone other than the PR author).
 prh_author <- prh_raw %>% distinct(repository, number, pr_author = identity)
 t_human <- rev_raw %>%
   inner_join(prh_author, by = c("repository", "pr_number" = "number")) %>%
-  mutate(human = !is_auto & author != pr_author) %>%
+  mutate(human = !is_tmpl & author != pr_author) %>%
   filter(human) %>%
   mutate(t = as_datetime(comment_time)) %>% filter(!is.na(t)) %>%
   group_by(repository, pr_number) %>% summarise(t_human = min(t), .groups = "drop")
@@ -162,7 +169,7 @@ fig_pr_human <- prh_raw %>%
 
 # =============================================================================
 # In-text numbers read off the overview figures (Jan 2025 - Apr 2026 window;
-# baseline = mean of Jan-Apr 2025, end = Apr 2026), recorded for check_paper.R.
+# baseline = mean of Jan-Apr 2025, end = Apr 2026), recorded for R/run_all.R.
 # =============================================================================
 local({
   win  <- function(d) d %>% filter(month >= as.Date("2025-01-01"), month <= as.Date("2026-04-01"))

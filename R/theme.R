@@ -144,7 +144,7 @@ PDF_DEVICE <- if (Sys.info()[["sysname"]] == "Darwin" && capabilities("aqua")) {
 # are deliberately tight; pass `height` to override. Saved width MUST match the
 # \includegraphics width in main.tex so the figure is not rescaled (which would
 # distort the font sizes calibrated above).
-save_fig <- function(plot, name, cols = 1, height = NULL, dir = "figures") {
+save_fig <- function(plot, name, cols = 1, height = NULL, dir = "output/figures") {
   width <- if (cols == 2) TEXT_W else COL_W
   if (is.null(height)) height <- if (cols == 2) H_WIDE else H_STD
   if (!dir.exists(dir)) dir.create(dir, recursive = TRUE)

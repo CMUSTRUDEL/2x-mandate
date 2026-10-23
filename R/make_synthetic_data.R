@@ -4,7 +4,7 @@
 # produces are meaningless; it exists to exercise the code and document the
 # schema by example. Nothing here is derived from the study data.
 #
-# Run from the package root:  Rscript R/make_synthetic_data.R [out_dir]
+# Run from the repository root:  Rscript R/make_synthetic_data.R [out_dir]
 # =============================================================================
 suppressMessages({ library(tidyverse) })
 set.seed(42)
@@ -62,14 +62,15 @@ prs <- dm %>% filter(n > 0) %>% uncount(n) %>%
          review_lead_time_hours = rexp(n(), 1 / 10) * (1 + 0.2 * ai),
          total_cycle_time_hours = coding_lead_time_hours + pickup_time_hours + review_lead_time_hours,
          labels = if_else(ai, "created-by-ai", ""),
+         ai_any_label = ai | runif(n()) < 0.02,
          is_automated = FALSE,
-         is_generated = runif(n()) < 0.01) %>%
+         is_generated = runif(n()) < 0.01, has_review = runif(n()) < 0.85) %>%
   group_by(repository) %>% mutate(number = row_number() + 100L) %>% ungroup()
 
 # Old PRs so some repositories are "pre-2022", plus a few automated PRs.
 old <- tibble(repository = repos[1:10], identity = sample(devs, 10),
               created_at = as.POSIXct("2019-06-01") + runif(10, 0, 3e7), number = 1L,
-              state = "MERGED", labels = "", is_automated = FALSE, is_generated = FALSE)
+              state = "MERGED", labels = "", is_automated = FALSE, is_generated = FALSE, has_review = FALSE)
 botpr <- tibble(repository = sample(repos, 50, replace = TRUE), identity = sample(bots, 50, replace = TRUE),
                 created_at = ts_in(sample(months, 50, replace = TRUE), 50), number = 10000L + 1:50,
                 state = "MERGED", labels = "", is_automated = TRUE, is_generated = FALSE,
@@ -79,7 +80,7 @@ pr_out <- bind_rows(prs, old, botpr) %>%
   select(repository, number, identity, created_at, merged_at, state, labels, title, head_ref,
          lines_added, lines_removed, files_changed, commit_count, iteration_count, is_revert,
          comment_count, coding_lead_time_hours, pickup_time_hours, review_lead_time_hours,
-         total_cycle_time_hours, is_automated, is_generated)
+         total_cycle_time_hours, ai_any_label, is_automated, is_generated, has_review)
 write_csv(pr_out, file.path(out, "pull_requests.csv"), na = "")
 
 # Review events: human reviewers (other developers) and automated reviewers.

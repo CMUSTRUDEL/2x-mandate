@@ -1,23 +1,27 @@
-# Replication package: statistical analyses and figures
+# Statistical analysis code
 
-This package contains the full statistical analysis and figure-generation code
-for the accompanying paper on the impact of AI coding tools on developer
-throughput and code review, including its supplementary material. It lets
-reviewers **inspect every analysis**, **run the pipeline end to end on synthetic
-data**, and, given the study data or a comparable dataset, **re-run it and check
-the results against the numbers printed in the paper**.
+This repository contains the statistical analysis and figure-generation code
+for the accompanying paper "AI Writes Faster Than Humans Can Review: A Longitudinal Study of an Enterprise ``2x'' Mandate", including its supplementary material. It lets
+readers **see exactly how every table, figure, and in-text number is computed**
+(see [Where each result is computed](#where-each-result-is-computed)) and **run
+the full pipeline** on a dataset in the documented input schema.
 
 ## Data availability
 
 **No data is included.** The study data was provided under a confidentiality
 agreement with the participating organization and cannot be redistributed in any
-form. This package therefore ships code, a documented input schema, and a
-synthetic-data generator. To run the pipeline on real data, place a conforming
-dataset under `data/` (see [Input schema](#input-schema)).
+form. This repository therefore contains code, a documented input schema, and a
+synthetic-data generator.
+
+The synthetic data exists only so the code can be run end to end: it shows what
+each output looks like and that every script executes. **Numbers computed from it
+are meaningless and are not expected to resemble the paper.** To run the
+pipeline on real data, place a conforming dataset under `data/` (see
+[Input schema](#input-schema)).
 
 All identifiers in the schema are opaque account and repository IDs; none of the
 code depends on real names, and no organization-, person-, or
-vendor-contract-identifying strings are present in this package.
+vendor-contract-identifying strings are present in this repository.
 
 ## Relationship to the paper
 
@@ -25,55 +29,90 @@ Anonymizing the code meant simplifying parts of the data pipeline, most notably:
 automated accounts and templated bot messages are taken as given flags
 (`is_automated`, `is_templated`, `is_generated`), whereas the paper describes the
 detection procedure that produced them. The paper reflects the actual research
-process; this package is a faithful but deliberately simplified rendering of the
+process; this code is a faithful but deliberately simplified rendering of the
 statistical analyses built on top of it.
 
 ## Quick start
 
 ```sh
-Rscript R/make_synthetic_data.R      # writes a small synthetic dataset to data/
-Rscript R/check_paper.R              # runs every analysis, compares with the paper
-CHECK_FIGURES=1 Rscript R/check_paper.R   # ... and also writes figures/*.pdf
+Rscript R/make_synthetic_data.R   # optional: writes a synthetic dataset to data/
+Rscript R/run_all.R               # runs every analysis on data/ and writes output/
 ```
 
-On synthetic data almost every comparison fails by design; the run shows that the
-code executes end to end. On the study data, `R/check_paper.R` reports how many of
-the paper's numbers are reproduced and lists any that are not.
+`R/run_all.R` writes:
 
-Run every command from the package root. Each analysis script can also be run on
-its own (e.g. `Rscript R/02_rq2.R`); it sources `R/data_layer.R` if needed.
-`reproduce.Rmd` knits the whole pipeline into one HTML report.
+- `output/results.csv`: every number the paper reports, one row each, with its
+  value, p-value (for regression coefficients), where it appears in the paper,
+  and the script that computes it;
+- `output/tables/*.md`: the paper's tables, rebuilt in the paper's layout with
+  significance stars;
+- `output/figures/*.pdf`: every figure of the paper and its supplement.
+
+Each analysis script also runs on its own and prints its results (e.g.
+`Rscript R/02_rq2.R`); it sources `R/data_layer.R` if needed. `reproduce.Rmd`
+knits the whole pipeline into one HTML report. Run every command from the repository
+root.
+
+## Where each result is computed
+
+Table, figure, and section numbers refer to the paper; "Suppl." is its
+supplementary material. Script sections are marked in the code with
+`## ---- (n)` headings.
+
+| Paper item | Script, section |
+|---|---|
+| Table I (developer-level DiD) | `R/01_rq1.R` (1) |
+| Table II (decomposition), and the calendar-month FE version in Sec. IV-A | `R/01_rq1.R` (2) |
+| Table III, seniority tiers | `R/02_rq2.R` (1) |
+| Table III, repository cohorts | `R/02_rq2.R` (2) |
+| Table IV (per-PR effects of AI authorship) | `R/03_rq3.R` (4) |
+| Table V (dataset summary) | `R/data_layer.R` (6) |
+| Table VI (cycle-time phases) | `R/03_rq3.R` (4) |
+| Table VII (estimators) | `R/01_rq1.R` (3) |
+| Table VIII (PR splitting) | `R/05_supplement.R` (A) |
+| Table IX (PR types) | `R/05_supplement.R` (C) |
+| Table X (working time) | `R/05_supplement.R` (B) |
+| Table XI (capability ladder, placebo, seasonality) | `R/02_rq2.R` (3) |
+| Sec. IV-A in-text numbers (throughput ratio, developers active throughout, spend, event-study multipliers, merged-PR outcome) | `R/01_rq1.R` (0), (1), (4); `R/figure_data.R` (end) |
+| Sec. IV-B robustness of the accumulated-use slope | `R/02_rq2.R` (3) |
+| Sec. IV-C review volume, reviewer pool, review shares, AI-PR size | `R/figure_data.R` (end); `R/03_rq3.R` (3), (4) |
+| Suppl. C-D (organization-level latency) | `R/figure_data.R` (end) |
+| Suppl. D-B (adoption-signal robustness) | `R/01_rq1.R` (6) |
+| Suppl. D-D (denominator, zero-output months) | `R/01_rq1.R` (5) |
+| Suppl. E-B title-style check | `R/05_supplement.R` (D) |
+| Suppl. E-D (follow-up fixes) | `R/05_supplement.R` (E) |
+| Fig. 1 (`fig_adoption`) | `R/04_figures.R`, "fig_adoption" |
+| Fig. 2, 4, 6, 8, 10, 12 (`fig_overview_*`) | `R/04_figures.R`, `make_overview()`; series built in `R/figure_data.R` |
+| Fig. 3 (`fig_identification`, simulated) | `R/04_figures.R`, "fig_identification" |
+| Fig. 5 and 14 (`fig_adoption_eventstudy`, `..._pretrends`) | `R/04_figures.R`, "fig_adoption_eventstudy" |
+| Fig. 7 and 9 (`fig_review_reallocation`, `fig_review_decomp_mean`) | `R/04_figures.R`, "fig_review_reallocation" |
+| Fig. 11 (`fig_review_latency`) | `R/04_figures.R`, "fig_review_latency" |
+| Fig. 13 (`fig_overview_spend`) | `R/04_figures.R`, "fig_overview_spend" |
+| Fig. 15 (`fig_capability_experience`) | `R/04_figures.R`, "fig_capability_experience" |
+
+The keys in `output/results.csv` carry the same mapping in their `where` and
+`script` columns.
 
 ## Layout
 
 ```
 R/
   data_layer.R           Reads the input tables; applies the automation/window/
-                         estimation-sample filters and builds the canonical objects
-                         every analysis uses (also builds tab:data).
-  01_rq1.R               RQ1: throughput, within-developer DiD (tab:did), the
-                         decomposition (tab:decomp), five staggered-adoption
-                         estimators (tab:robust), event study, denominator and
-                         adoption-signal robustness.
-  02_rq2.R               RQ2: seniority tiers and repository cohorts (tab:tier), the
-                         capability ladder with placebo and seasonality (tab:ladder)
-                         and its robustness variants.
-  03_rq3.R               RQ3: review shares, reviewer load, and the per-PR effect of
-                         AI authorship (tab:review, tab:phases).
-  05_supplement.R        Supplement: PR splitting (tab:splitting), working time
-                         (tab:worktime), PR types (tab:prtypes), title-style check,
-                         and follow-up fixes.
-  figure_data.R          Descriptive per-month / per-PR / per-reviewer series behind
+                         estimation-sample filters; builds the canonical objects
+                         every analysis uses.
+  01_rq1.R               RQ1: throughput, DiD, decomposition, estimators, event
+                         study, denominator and adoption-signal robustness.
+  02_rq2.R               RQ2: seniority tiers, repository cohorts, capability ladder.
+  03_rq3.R               RQ3: review shares, reviewer load, per-PR effects.
+  05_supplement.R        Supplement: splitting, working time, PR types, title style,
+                         follow-up fixes.
+  figure_data.R          Descriptive monthly / per-PR / per-reviewer series behind
                          the figures, and the in-text numbers read off them.
-  04_figures.R           All figures of the paper and supplement, written to
-                         figures/*.pdf.
+  04_figures.R           All figures.
   theme.R                Shared ggplot theme, palette, and figure-saving helpers.
-  check_paper.R          Runs everything and compares each recorded number with
-                         expected/paper_values.csv; writes output/check_results.csv.
+  tables.R               Rebuilds the paper's tables from the recorded numbers.
+  run_all.R              Runs everything and writes output/.
   make_synthetic_data.R  Writes a synthetic dataset in the input schema to data/.
-expected/
-  paper_values.csv       Every number the paper reports: value, tolerance implied by
-                         the paper's rounding, comparison, and LaTeX label.
 reproduce.Rmd            Knits the whole pipeline into one HTML report.
 ```
 
@@ -112,6 +151,7 @@ first-ever PR.
 | `merged_at` | timestamp | merge time (empty if never merged) |
 | `state` | string | `MERGED` / `CLOSED` / `OPEN` |
 | `labels` | string | label names; a `created-by-ai` label marks an AI-authored PR |
+| `ai_any_label` | bool | `TRUE` if the PR carries any AI-attribution label (`created-by-ai` or a tool-specific one); used only for the descriptive AI-share series |
 | `title` | string | PR title (used only by the PR-type classifier) |
 | `head_ref` | string | source branch name (used only by the PR-type classifier) |
 | `lines_added`, `lines_removed` | int | PR size components |
@@ -119,6 +159,7 @@ first-ever PR.
 | `commit_count` | int | commits in the PR |
 | `iteration_count` | int | review rounds (review-and-revise iterations) |
 | `is_revert` | bool | whether the PR reverts another |
+| `has_review` | bool | whether the PR received any review (used for the review-rounds model) |
 | `comment_count` | int | total review/PR comments |
 | `coding_lead_time_hours`, `pickup_time_hours`, `review_lead_time_hours`, `total_cycle_time_hours` | float | DORA-style cycle-time phases (hours) |
 | `is_automated` | bool | `TRUE` if authored by an automated account; such PRs are excluded |
@@ -134,7 +175,7 @@ first-ever PR.
 | `type` | string | `comment`, `review_thread`, `review:commented`, `review:changes_requested`, `review:approved`, `review:dismissed` |
 | `comment_time` | timestamp | event time |
 | `is_automated` | bool | `TRUE` if the reviewer account is automated (bot account) |
-| `is_templated` | bool | `TRUE` if the event is templated tool output, e.g. a bot message posted through a human account; used by the descriptive review series |
+| `is_templated` | bool | `TRUE` if the event itself is automated: templated tool output (e.g. a bot message posted through a human account) or flagged as a bot in the source export; used by the descriptive review series and the review-timing figure |
 
 ### `commits.csv`: one row per commit
 
@@ -170,10 +211,8 @@ Adoption is defined from this telemetry: a developer-month is *adopted* if any o
 - **Active month**: a developer-month with at least one authored PR (independent of
   treatment, so adopters and never-adopters are filtered symmetrically).
 - **Estimation sample**: developers with at least 3 active months.
-- **AI authorship**: a PR is AI-authored when its `labels` contain `created-by-ai`.
+- **AI authorship**: a PR is AI-authored when its `labels` contain `created-by-ai`
+  (the descriptive AI-share series uses the broader `ai_any_label`).
 - **Automation**: bot exclusion and the human-vs-automated review split are driven
   by the flags above. A *human review* is a non-automated review by someone other
   than the PR author.
-- **Recorded numbers**: every number the paper reports is stored with
-  `record(key, value)`; `R/check_paper.R` compares them with
-  `expected/paper_values.csv`.

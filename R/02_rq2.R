@@ -15,7 +15,7 @@ for (tg in levels(pet$tier)) {
   m <- feols(log_n_prs ~ adopted + post | identity, d, cluster = ~identity)
   cat(sprintf("  %-11s n=%3d  adopted %+0.3f  (%+d%%)\n",
               tg, n_distinct(d$identity), coef(m)["adopted"], round(100 * (exp(coef(m)["adopted"]) - 1))))
-  record(paste0("tier.", tg, ".n"), n_distinct(d$identity)); record(paste0("tier.", tg, ".adopted"), coef(m)["adopted"])
+  record(paste0("tier.", tg, ".n"), n_distinct(d$identity)); record(paste0("tier.", tg, ".adopted"), coef(m)["adopted"], pvalue(m)["adopted"])
 }
 # Do adoption effects differ across the IC-to-principal ladder? Joint Wald test of
 # the adopted x {Senior, Staff, Principal} interactions (IC = reference).
@@ -38,12 +38,12 @@ for (cg in c("pre2022", "2022plus")) {
   m <- feols(log_n_prs ~ adopted + post | identity, d, cluster = ~identity)
   cat(sprintf("  %-9s cells=%d  adopted %+0.3f  (%+d%%)\n",
               cg, nrow(d), coef(m)["adopted"], round(100 * (exp(coef(m)["adopted"]) - 1))))
-  record(paste0("cohort.", cg, ".cells"), nrow(d)); record(paste0("cohort.", cg, ".adopted"), coef(m)["adopted"])
+  record(paste0("cohort.", cg, ".cells"), nrow(d)); record(paste0("cohort.", cg, ".adopted"), coef(m)["adopted"], pvalue(m)["adopted"])
 }
 cint <- feols(log_n_prs ~ adopted * cohort + post | ic, coh, cluster = ~identity)
 ct <- summary(cint)$coeftable; ir <- grep("^adopted:cohort", rownames(ct), value = TRUE)[1]
 cat(sprintf("  (newer - legacy difference: %+0.3f, p=%.3f)\n", ct[ir, 1], ct[ir, 4]))
-record("cohort.diff", ct[ir, 1]); record("cohort.diff_p", ct[ir, 4])
+record("cohort.diff", ct[ir, 1], ct[ir, 4]); record("cohort.diff_p", ct[ir, 4])
 
 ## ---- (3) tab:ladder: capability vs experience + placebo ---------------------
 # ever-adopters with >= 6 active months; release indicators switch on the first
@@ -66,12 +66,13 @@ cat(sprintf("  + month-of-year FE: Sonnet %+0.3f | Opus %+0.3f | Gen46 %+0.3f | 
             coef(ladm)["sonnet45"], coef(ladm)["opus45"], coef(ladm)["gen46"], coef(ladm)["log_cum_ai"]))
 cat(sprintf("  PLACEBO (Aug 2025) %+0.3f (p=%.3g)  <- should match real-release magnitude\n",
             coef(pla)["placebo"], summary(pla)$coeftable["placebo", 4]))
-record("ladder.sonnet45", coef(lad)["sonnet45"]); record("ladder.opus45", coef(lad)["opus45"])
-record("ladder.gen46", coef(lad)["gen46"]); record("ladder.experience", coef(lad)["log_cum_ai"])
-record("ladder.post", coef(lad)["post"])
-record("ladder_moy.sonnet45", coef(ladm)["sonnet45"]); record("ladder_moy.opus45", coef(ladm)["opus45"])
-record("ladder_moy.gen46", coef(ladm)["gen46"]); record("ladder_moy.experience", coef(ladm)["log_cum_ai"])
-record("ladder.placebo", coef(pla)["placebo"]); record("ladder.placebo_p", pvalue(pla)["placebo"])
+for (v in c("sonnet45", "opus45", "gen46", "log_cum_ai", "post")) {
+  k <- if (v == "log_cum_ai") "experience" else v
+  record(paste0("ladder.", k), coef(lad)[v], pvalue(lad)[v])
+  if (v != "post") record(paste0("ladder_moy.", k), coef(ladm)[v], pvalue(ladm)[v])
+}
+record("ladder.placebo", coef(pla)["placebo"], pvalue(pla)["placebo"])
+record("ladder.placebo_p", pvalue(pla)["placebo"])
 
 # The accumulated-use slope under alternative samples and measures: post-mandate
 # months only, Claude Code adopters only, and experience measured as the lagged
@@ -89,5 +90,5 @@ cat("  accumulated-use slope under variants (should stay positive and significan
 for (nm in names(variants)) {
   m <- variants[[nm]][[1]]; v <- variants[[nm]][[2]]
   cat(sprintf("    %-13s %+0.3f (p=%.3g)\n", nm, coef(m)[v], pvalue(m)[v]))
-  record(paste0("ladder_variant.", nm, ".slope"), coef(m)[v]); record(paste0("ladder_variant.", nm, ".p"), pvalue(m)[v])
+  record(paste0("ladder_variant.", nm, ".slope"), coef(m)[v], pvalue(m)[v]); record(paste0("ladder_variant.", nm, ".p"), pvalue(m)[v])
 }

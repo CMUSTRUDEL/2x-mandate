@@ -41,14 +41,20 @@ cat(sprintf("[spend] $%.0f -> $%.0f per developer-month (%.0fx); PRs/dev %.1fx o
 record("rq1.spend_jul25", s0$spend); record("rq1.spend_apr26", s1$spend)
 record("rq1.prs_ratio_jul25_apr26", s1$prs / s0$prs)
 
-# Pre-adoption throughput of early (pre-mandate) adopters vs everyone else, in SDs.
+# Balance table: early (pre-mandate) adopters vs never-adopters, standardized
+# mean differences of per-developer activity among developers with a role title.
 onset <- panel %>% filter(ai_any == 1) %>% group_by(identity) %>% summarise(g = min(month), .groups = "drop")
-pre <- pe %>% filter(month < MANDATE) %>% left_join(onset, by = "identity") %>%
-  filter(is.na(g) | month < g) %>% group_by(identity) %>%
-  summarise(m = mean(n_prs), early = first(!is.na(g) & g < MANDATE), .groups = "drop")
-smd <- (mean(pre$m[pre$early]) - mean(pre$m[!pre$early])) / sqrt((var(pre$m[pre$early]) + var(pre$m[!pre$early])) / 2)
-cat(sprintf("[balance] early adopters' pre-adoption monthly PRs: %.2f SD above other developers\n", smd))
-record("rq1.early_adopter_smd", smd)
+bal <- pe %>% inner_join(roles %>% filter(!is.na(tier)) %>% distinct(identity), by = "identity") %>%
+  left_join(onset, by = "identity") %>% group_by(identity) %>%
+  summarise(n_months = n(), total_prs = sum(n_prs), mean_monthly_prs = mean(n_prs),
+            cohort = ifelse(is.na(first(g)), "never", ifelse(first(g) < MANDATE, "early", "late")),
+            .groups = "drop")
+smd <- function(x1, x2) (mean(x1) - mean(x2)) / sqrt((sd(x1)^2 + sd(x2)^2) / 2)
+for (v in c("n_months", "total_prs", "mean_monthly_prs")) {
+  s <- smd(bal[[v]][bal$cohort == "early"], bal[[v]][bal$cohort == "never"])
+  cat(sprintf("[balance] early vs never adopters, SMD of %-16s %.2f\n", v, s))
+  record(paste0("rq1.balance_smd.", v), s)
+}
 
 ## ---- (1) tab:did : developer-month DiD, six outcomes -------------------------
 pe <- pe %>% mutate(
@@ -72,11 +78,12 @@ for (nm in names(did_outcomes)) {
   v <- did_outcomes[[nm]]
   m <- feols(as.formula(sprintf("%s ~ adopted + post | identity", v)), pe, cluster = ~identity)
   cat(sprintf("  %-24s %-10s  %s\n", nm, cc(m), cc(m, "post")))
-  record(paste0("did.", v, ".adopted"), coef(m)["adopted"]); record(paste0("did.", v, ".post"), coef(m)["post"])
+  record(paste0("did.", v, ".adopted"), coef(m)["adopted"], pvalue(m)["adopted"])
+  record(paste0("did.", v, ".post"), coef(m)["post"], pvalue(m)["post"])
 }
 mm <- feols(log_n_merged ~ adopted + post | identity, pe, cluster = ~identity)
 cat(sprintf("  merged-PR outcome: log(Monthly merged PRs) adopted %s\n", cc(mm)))
-record("rq1.merged_outcome_adopted", coef(mm)["adopted"])
+record("rq1.merged_outcome_adopted", coef(mm)["adopted"], pvalue(mm)["adopted"])
 
 ## ---- (2) tab:decomp : adoption jump + accumulating use ----------------------
 ee <- pe %>% filter(month == END_MONTH, ai_any == 1) %>% summarise(m = mean(log_cum_ai)) %>% pull(m)
@@ -85,7 +92,8 @@ b1 <- coef(dec)["adopted"]; bb <- coef(dec)["log_cum_ai"]; th <- coef(dec)["post
 cat(sprintf("\n[tab:decomp] jump %s (contrib %+0.2f) | slope %s (contrib %+0.2f) | post %s\n",
             cc(dec), b1, cc(dec, "log_cum_ai"), bb * ee, cc(dec, "post")))
 cat(sprintf("             total = %+0.2f  (%.2fx)\n", b1 + bb * ee + th, exp(b1 + bb * ee + th)))
-record("decomp.jump", b1); record("decomp.slope", bb); record("decomp.post", th)
+record("decomp.jump", b1, pvalue(dec)["adopted"]); record("decomp.slope", bb, pvalue(dec)["log_cum_ai"])
+record("decomp.post", th, pvalue(dec)["post"])
 record("decomp.slope_contrib", bb * ee); record("decomp.total", b1 + bb * ee + th)
 
 # Preferred model: calendar-month fixed effects instead of the Post term.
@@ -93,7 +101,8 @@ dm <- feols(log_n_prs ~ adopted + log_cum_ai | identity + factor(month), pe, clu
 tot <- coef(dm)["adopted"] + coef(dm)["log_cum_ai"] * ee
 cat(sprintf("             month FE: jump %s | slope %s | total %+.2f (%.2fx)\n",
             cc(dm), cc(dm, "log_cum_ai"), tot, exp(tot)))
-record("decomp_mfe.jump", coef(dm)["adopted"]); record("decomp_mfe.slope", coef(dm)["log_cum_ai"])
+record("decomp_mfe.jump", coef(dm)["adopted"], pvalue(dm)["adopted"])
+record("decomp_mfe.slope", coef(dm)["log_cum_ai"], pvalue(dm)["log_cum_ai"])
 record("decomp_mfe.total", tot); record("decomp_mfe.multiplier", exp(tot))
 
 ## ---- (3) tab:robust : five estimators ---------------------------------------
@@ -123,8 +132,10 @@ bk <- tryCatch({
 }, error = function(e) { cat("  [Borusyak error]", conditionMessage(e), "\n"); c(att = NA, p = NA) })
 cat(sprintf("\n[tab:robust] TWFE %s | +MonthFE %s | Drop never %s | C&S %+.3f%s | Borusyak %+.3f%s\n",
             cc(tw), cc(mf), cc(r1), cs["att"], st(cs["p"]), bk["att"], st(bk["p"])))
-record("robust.twfe", coef(tw)["adopted"]); record("robust.month_fe", coef(mf)["adopted"])
-record("robust.drop_never", coef(r1)["adopted"]); record("robust.cs", cs["att"]); record("robust.borusyak", bk["att"])
+record("robust.twfe", coef(tw)["adopted"], pvalue(tw)["adopted"])
+record("robust.month_fe", coef(mf)["adopted"], pvalue(mf)["adopted"])
+record("robust.drop_never", coef(r1)["adopted"], pvalue(r1)["adopted"])
+record("robust.cs", cs["att"], cs["p"]); record("robust.borusyak", bk["att"], bk["p"])
 
 ## ---- (4) Event study: adoption effect at +3/+6/+9 months --------------------
 es <- pe %>% filter(gi > 0) %>% mutate(rel = t - gi) %>% filter(rel >= -6, rel <= 9)
@@ -132,7 +143,7 @@ mes <- feols(log_n_prs ~ i(rel, ref = -1) + post | identity, es, cluster = ~iden
 for (h in c(3, 6, 9)) {
   k <- paste0("rel::", h)
   cat(sprintf("[event study] h=+%d  %.2fx\n", h, exp(coef(mes)[k])))
-  record(paste0("rq1.event_h", h), exp(coef(mes)[k]))
+  record(paste0("rq1.event_h", h), exp(coef(mes)[k]), pvalue(mes)[k])
 }
 
 ## ---- (5) Denominator robustness (per engineer, zeros incl.) -----------------
@@ -144,7 +155,7 @@ pz <- fepois(n_prs ~ adopted | identity + mf, eng, cluster = ~identity)
 cat(sprintf("\n[denominator] per-engineer authored %.2fx | merged %.2fx | %.1f%% zero rows | Poisson jump %s\n",
             ratio(eng, "n_prs")["ratio"], ratio(eng, "n_merged")["ratio"], 100 * mean(eng$n_prs == 0), cc(pz)))
 record("denom.authored_ratio", ratio(eng, "n_prs")["ratio"]); record("denom.merged_ratio", ratio(eng, "n_merged")["ratio"])
-record("denom.zero_pct", 100 * mean(eng$n_prs == 0)); record("denom.poisson_jump", coef(pz)["adopted"])
+record("denom.zero_pct", 100 * mean(eng$n_prs == 0)); record("denom.poisson_jump", coef(pz)["adopted"], pvalue(pz)["adopted"])
 
 ## ---- (6) Adoption-signal robustness (app:prsignal) --------------------------
 # Broaden adoption to telemetry OR a created-by-ai PR that month.
@@ -158,5 +169,6 @@ n_reclass <- sum(!dev_sig$tel & dev_sig$lab)
 n_earlier <- sum(dev_sig$tel & dev_sig$lab & dev_sig$first_lab < dev_sig$first_tel)
 cat(sprintf("\n[app:prsignal] telemetry-only %s -> telemetry|AI-label %s; %d never-adopters reclassified, %d adoption dates earlier\n",
             cc(tw), cc(mb, "adopted_b"), n_reclass, n_earlier))
-record("prsignal.adopted", coef(mb)["adopted_b"]); record("prsignal.post", coef(mb)["post"])
+record("prsignal.adopted", coef(mb)["adopted_b"], pvalue(mb)["adopted_b"])
+record("prsignal.post", coef(mb)["post"], pvalue(mb)["post"])
 record("prsignal.reclassified", n_reclass); record("prsignal.earlier", n_earlier)

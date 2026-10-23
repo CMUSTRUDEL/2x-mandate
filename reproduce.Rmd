@@ -15,8 +15,9 @@ knitr::opts_knit$set(root.dir = rprojroot::find_root(rprojroot::has_file("README
 This notebook runs the full pipeline from one input data layer. All numbers,
 tables, and figures come from the canonical objects built in `R/data_layer.R`
 (`prs`, `reviews`, `commits`, `panel`, `panel_est`, `telem`, `roles`,
-`repo_cohort`). No data is distributed with this package; see `README.md` for the
-input schema, or run `R/make_synthetic_data.R` to create a synthetic dataset.
+`repo_cohort`). No data is distributed with this repository; see `README.md` for the
+input schema, or run `R/make_synthetic_data.R` to create a synthetic dataset
+(numbers computed from synthetic data are meaningless).
 
 **Automation rule:** a PR is excluded *iff* its `is_automated` flag is `TRUE`; a
 review event counts as non-human *iff* its `is_automated` flag is `TRUE` (the
@@ -53,15 +54,14 @@ source("R/03_rq3.R")
 source("R/05_supplement.R")
 ```
 
-# 6. Figures
+# 6. Figures and tables
 
 ```{r figures}
 source("R/figure_data.R")
 source("R/04_figures.R")
+source("R/tables.R")
 ```
 
-# 7. Check against the paper
-
-```{r check}
-source("R/check_paper.R")
+```{r tables, results = "asis"}
+for (f in list.files("output/tables", pattern = "[.]md$", full.names = TRUE)) cat(readLines(f), "", sep = "\n")
 ```

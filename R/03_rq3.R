@@ -51,7 +51,8 @@ record("rq3.load_ratio", lg("load"))
 
 ## ---- (4) tab:review / tab:phases : per-PR effect of AI authorship -----------
 # Author + month FE, size controls, author-clustered SEs. P(merged) is estimated
-# on all PRs; every other outcome on merged PRs. Review rounds via Poisson.
+# on all PRs; every other outcome on merged PRs. Review rounds via Poisson, on
+# merged PRs that received a review (has_review).
 pr_all <- prq %>%
   mutate(lsize = log1p(size), lfiles = log1p(replace_na(files_changed, 0)),
          AI = as.integer(ai), postm = month >= MANDATE, merged_i = as.integer(merged))
@@ -73,7 +74,7 @@ rows <- list(merged   = list("P(merged)",               pr_all, "ols"),
              lpick    = list("log(1+Pickup)",           pr_m,   "ols"),
              lrev     = list("log(1+Review Lead)",      pr_m,   "ols"),
              lcyc     = list("log(1+Total Cycle)",      pr_m,   "ols"),
-             rounds   = list("Review Rounds (Poisson)", pr_m,   "pois"),
+             rounds   = list("Review Rounds (Poisson)", filter(pr_m, has_review), "pois"),
              hcov     = list("Human Review Coverage",   pr_m,   "ols"))
 for (k in names(rows)) {
   lab <- rows[[k]][[1]]; d <- rows[[k]][[2]]; fam <- rows[[k]][[3]]
@@ -83,7 +84,8 @@ for (k in names(rows)) {
   mp <- fit(d); mq <- fit(filter(d, postm))
   cat(sprintf("  %-26s %+0.3f%-3s     %+0.3f%-3s\n", lab,
               coef(mp)["AI"], st3(pvalue(mp)["AI"]), coef(mq)["AI"], st3(pvalue(mq)["AI"])))
-  record(paste0("review.", k, ".pooled"), coef(mp)["AI"]); record(paste0("review.", k, ".post"), coef(mq)["AI"])
+  record(paste0("review.", k, ".pooled"), coef(mp)["AI"], pvalue(mp)["AI"])
+  record(paste0("review.", k, ".post"), coef(mq)["AI"], pvalue(mq)["AI"])
 }
 
 # AI-authored PRs are larger: post-mandate size gap within author and month.
@@ -92,5 +94,5 @@ msz <- feols(lsize ~ AI | identity + month, post_m, cluster = ~identity)
 med_ai <- median(post_m$size[post_m$AI == 1]); med_other <- median(post_m$size[post_m$AI == 0])
 cat(sprintf("\n[size] post-mandate AI-authored PRs: %+0.2f log points of lines changed (%+.0f%%); median %.0f vs %.0f lines\n",
             coef(msz)["AI"], 100 * (exp(coef(msz)["AI"]) - 1), med_ai, med_other))
-record("rq3.ai_size_logpts", coef(msz)["AI"]); record("rq3.ai_size_median", med_ai)
+record("rq3.ai_size_logpts", coef(msz)["AI"], pvalue(msz)["AI"]); record("rq3.ai_size_median", med_ai)
 record("rq3.other_size_median", med_other)

@@ -1,13 +1,11 @@
-# No data is distributed with this package (confidentiality agreement).
+# No data is distributed with this repository (confidentiality agreement).
 data/
 *.csv
-!expected/*.csv
 
-# Generated outputs
-figures/
+# Generated outputs (R/run_all.R)
+output/
 *.pdf
 *.html
 .Rhistory
 .RData
 .Rproj.user/
-output/
