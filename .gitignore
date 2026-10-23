@@ -1,0 +1,13 @@
+# No data is distributed with this package (confidentiality agreement).
+data/
+*.csv
+!expected/*.csv
+
+# Generated outputs
+figures/
+*.pdf
+*.html
+.Rhistory
+.RData
+.Rproj.user/
+output/

@@ -1,0 +1,67 @@
+---
+title: "Statistical analyses and figures"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    df_print: kable
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, comment = "")
+knitr::opts_knit$set(root.dir = rprojroot::find_root(rprojroot::has_file("README.md")))
+```
+
+This notebook runs the full pipeline from one input data layer. All numbers,
+tables, and figures come from the canonical objects built in `R/data_layer.R`
+(`prs`, `reviews`, `commits`, `panel`, `panel_est`, `telem`, `roles`,
+`repo_cohort`). No data is distributed with this package; see `README.md` for the
+input schema, or run `R/make_synthetic_data.R` to create a synthetic dataset.
+
+**Automation rule:** a PR is excluded *iff* its `is_automated` flag is `TRUE`; a
+review event counts as non-human *iff* its `is_automated` flag is `TRUE` (the
+descriptive review series also treat `is_templated` events as automated).
+
+# 1. Data layer and dataset summary
+
+```{r data}
+source("R/data_layer.R")
+.summary()
+```
+
+# 2. RQ1: throughput, the within-developer DiD, decomposition, robustness
+
+```{r rq1}
+source("R/01_rq1.R")
+```
+
+# 3. RQ2: heterogeneity (seniority, repository cohort, capability ladder)
+
+```{r rq2}
+source("R/02_rq2.R")
+```
+
+# 4. RQ3: review reshaping, per-PR effect of AI authorship, quality
+
+```{r rq3}
+source("R/03_rq3.R")
+```
+
+# 5. Supplement: splitting, working time, PR types, follow-up fixes
+
+```{r supplement}
+source("R/05_supplement.R")
+```
+
+# 6. Figures
+
+```{r figures}
+source("R/figure_data.R")
+source("R/04_figures.R")
+```
+
+# 7. Check against the paper
+
+```{r check}
+source("R/check_paper.R")
+```
